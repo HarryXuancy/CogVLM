@@ -61,6 +61,8 @@ def process_image_without_resize(image_prompt):
 
 from sat.quantization.kernels import quantize
 
+local_model_path = "/mnt/nfs/hushuai.p/cogvlm"
+
 def load_model(args): 
     model, model_args = AutoModel.from_pretrained(
         args.from_pretrained,
@@ -76,6 +78,7 @@ def load_model(args):
         skip_init=True,
         use_gpu_initialization=True if (torch.cuda.is_available() and args.quant is None) else False,
         device='cpu' if args.quant else 'cuda'),
+        home_path = local_model_path,
         overwrite_args={'model_parallel_size': world_size} if world_size != 1 else {}
     )
     model = model.eval()
@@ -210,7 +213,7 @@ def main(args):
 
 
     # demo.queue(concurrency_count=10)
-    demo.launch()
+    demo.launch(server_name="10.148.122.139", server_port=13087, share=True)
 
 
 if __name__ == '__main__':

@@ -12,6 +12,48 @@ from sat.model import AutoModel
 from utils.utils import chat, llama2_tokenizer, llama2_text_processor_inference, get_image_processor
 from utils.models import CogAgentModel, CogVLMModel
 
+def read_png_files_recursively(directory):
+    """
+    递归地从给定目录及其子目录中读取 .png 文件路径。
+
+    参数:
+    directory (str): 根目录路径。
+
+    返回:
+    Generator[str]: .png 文件路径的生成器。
+    """
+    for root, dirs, files in os.walk(directory):
+        for filename in files:
+            if filename.lower().endswith('.png'):
+                file_path = os.path.join(root, filename)
+                yield file_path
+
+def read_png_files_from_directory(directory):
+    """
+    从给定目录中逐个读取文件路径。
+
+    参数:
+    directory (str): 目录路径。
+
+    返回:
+    Generator[str]: 文件路径的生成器。
+    """
+    for filename in os.listdir(directory):
+        if os.path.isfile(os.path.join(directory, filename)):
+            if filename.lower().endswith('.png'):
+                yield os.path.join(directory, filename)
+
+def write_answer_to_file(answer, file_path):
+    """
+    将回答写入到指定的文本文件中。
+
+    参数:
+    answer (str): 要写入的回答文本。
+    file_path (str): 文件路径。
+    """
+    with open(file_path, 'a', encoding='utf-8') as file:
+        file.write(answer + '\n')  # 追加回答并在末尾添加换行符
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--max_length", type=int, default=2048, help='max length of the total sequence')
@@ -77,42 +119,22 @@ def main():
     else:
         if rank == 0:
             print('Welcome to CogAgent-CLI. Enter an image URL or local file path to load an image. Continue inputting text to engage in a conversation. Type "clear" to start over, or "stop" to end the program.')
+    
+    directory_path = '/mnt/nfs/xcy/DataSet/Combination_pictures'
+    chat_log_path = '/mnt/nfs/xcy/lxqw_short_log.jsonl'
     with torch.no_grad():
-        while True:
+        for png_file_path in read_png_files_recursively(directory_path):
             history = None
             cache_image = None
-            if args.chinese:
-                if rank == 0:
-                    image_path = [input("请输入图像路径或URL： ")]
-                else:
-                    image_path = [None]
-            else:
-                if rank == 0:
-                    image_path = [input("Please enter the image path or URL: ")]
-                else:
-                    image_path = [None]
+            image_path = [png_file_path]
+            query = ["Please describe the picture for me in short."]
             if world_size > 1:
                 torch.distributed.broadcast_object_list(image_path, 0)
-            image_path = image_path[0]
-            assert image_path is not None
-
-            if image_path == 'stop':
-                break
-
-            if args.chinese:
-                if rank == 0:
-                    query = [input("用户：")]
-                else:
-                    query = [None]
-            else:
-                if rank == 0:
-                    query = [input("User: ")]
-                else:
-                    query = [None]
             if world_size > 1:
                 torch.distributed.broadcast_object_list(query, 0)
+            image_path = image_path[0]
+            # write_answer_to_file(image_path, chat_log_path)
             query = query[0]
-            assert query is not None
             
             while True:
                 if query == "clear":
@@ -139,26 +161,21 @@ def main():
                 except Exception as e:
                     print(e)
                     break
+
+                filename = os.path.basename(image_path)
+                log = "{" + f"\"file_name\": \"{filename}\", \"text\": \"lxqw style, {response}\"" + "}"
+                write_answer_to_file(log, chat_log_path)
+
                 if rank == 0 and not args.stream_chat:
                     if args.chinese:
                         print("模型："+response)
                     else:
                         print("Model: "+response)
-                image_path = None
-                if args.chinese:
-                    if rank == 0:
-                        query = [input("用户：")]
-                    else:
-                        query = [None]
-                else:
-                    if rank == 0:
-                        query = [input("User: ")]
-                    else:
-                        query = [None]
+                
+                query = ["clear"]
                 if world_size > 1:
                     torch.distributed.broadcast_object_list(query, 0)
                 query = query[0]
-                assert query is not None
 
 
 if __name__ == "__main__":

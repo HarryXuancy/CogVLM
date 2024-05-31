@@ -21,6 +21,7 @@ parser.add_argument("--bf16", action="store_true")
 
 args = parser.parse_args()
 MODEL_PATH = args.from_pretrained
+print(MODEL_PATH)
 TOKENIZER_PATH = args.local_tokenizer
 DEVICE = 'cuda' if torch.cuda.is_available() else 'cpu'
 
